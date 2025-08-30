@@ -39,6 +39,9 @@ public sealed partial class SepReader : SepReaderState
     readonly int _charsMinimumFreeLength;
     int _charsPaddingLength;
 
+    int _commitedOffset = 0;
+    readonly Encoding _encoding;
+
     internal SepReader(Info info, in SepReaderOptions options, TextReader reader)
         : base(colUnquoteUnescape: options.Unescape, trim: options.Trim)
     {
@@ -49,6 +52,8 @@ public sealed partial class SepReader : SepReaderState
         _disableQuotesParsing = options.DisableQuotesParsing;
         _continueOnCapturedContext = options.AsyncContinueOnCapturedContext;
         _arrayPool = new();
+        
+        _encoding = reader is StreamReader streamReader ? streamReader.CurrentEncoding : Encoding.UTF8;
 
         var decimalSeparator = _cultureInfo?.NumberFormat.CurrencyDecimalSeparator ??
             System.Globalization.CultureInfo.InvariantCulture.NumberFormat.CurrencyDecimalSeparator;
@@ -90,6 +95,7 @@ public sealed partial class SepReader : SepReaderState
     public bool HasHeader { get => _hasHeader; private set => _hasHeader = value; }
     public bool HasRows { get; private set; }
     public SepReaderHeader Header => _header;
+    public long CommittedOffset => _commitedOffset;
 
     internal int CharsLength => _chars.Length;
 
@@ -145,6 +151,23 @@ public sealed partial class SepReader : SepReaderState
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal bool HasParsedRows() => _parsedRowIndex < _parsedRowsCount;
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    int CalculateRowBytesLength()
+    {
+        var (start, end) = RowStartEnd();
+        var nextRowStart = end + 1;
+        if (nextRowStart <= _charsDataEnd)
+        {
+            var rowWithLineEndingSpan = _chars.AsSpan(start, nextRowStart - start);
+            return _encoding.GetByteCount(rowWithLineEndingSpan);
+        }
+        else
+        {
+            var rowSpan = _chars.AsSpan(start, end - start);
+            return _encoding.GetByteCount(rowSpan);
+        }
+    }
 
     void CheckColInfosCapacityMaybeDouble(int paddingLength)
     {

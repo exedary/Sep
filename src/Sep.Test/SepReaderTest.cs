@@ -43,6 +43,32 @@ public partial class SepReaderTest
     }
 
     [TestMethod]
+    public async Task SepReaderTest_CommittedOffset()
+    {
+        var csvData = "Name,Age,City\nJohn,30,NYC\nJane,25,LA\n";
+        var bytes = Encoding.UTF8.GetBytes(csvData);
+        
+        using var stream = new MemoryStream(bytes);
+        using var reader = await Sep.Reader().FromAsync(stream);
+        
+        // After initialization, header is already processed (13 bytes for "Name,Age,City\n")
+        var initialOffset = reader.CommittedOffset;
+        Assert.AreEqual(14, initialOffset);
+        
+        await reader.MoveNextAsync(); // First data row
+        var firstRowOffset = reader.CommittedOffset;
+        Assert.IsTrue(firstRowOffset > initialOffset);
+        
+        await reader.MoveNextAsync(); // Second data row  
+        var secondRowOffset = reader.CommittedOffset;
+        Assert.IsTrue(secondRowOffset > firstRowOffset);
+        
+        var hasMore = await reader.MoveNextAsync(); // Should be false
+        Assert.IsFalse(hasMore);
+        Assert.AreEqual(bytes.Length, reader.CommittedOffset);
+    }
+
+    [TestMethod]
     public void SepReaderTest_CreateFromStreamReader()
     {
         using var stream = new MemoryStream(Encoding.UTF8.GetBytes("A;B"));

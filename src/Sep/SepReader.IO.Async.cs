@@ -110,7 +110,11 @@ public sealed partial class SepReader
         } while (ParseNewRows());
         return false;
 #else
-        if (MoveNextAlreadyParsed()) { return ValueTask.FromResult(true); }
+        if (MoveNextAlreadyParsed())
+        {
+            _commitedOffset += CalculateRowBytesLength();
+            return ValueTask.FromResult(true);
+        }
         return Impl(cancellationToken);
 
         async ValueTask<bool> Impl(CancellationToken cancellationToken)
@@ -118,7 +122,11 @@ public sealed partial class SepReader
             while (await ParseNewRowsAsync(cancellationToken)
                 .ConfigureAwait(_continueOnCapturedContext))
             {
-                if (MoveNextAlreadyParsed()) { return true; }
+                if (MoveNextAlreadyParsed()) 
+                { 
+                    _commitedOffset += CalculateRowBytesLength();
+                    return true; 
+                }
             }
             return false;
         }
